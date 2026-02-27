@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camp Green Lake - Survival Sim</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        /* =========================================
+           CSS STYLES & UI
+           ========================================= */
+        :root {
+            --desert-gold: #ffd700;
+            --dusty-orange: #FF6200;
+            --dried-earth: #8B4513;
+            --jumpsuit-orange: #ff7b00;
+            --ui-glass: rgba(15, 8, 0, 0.85);
+            --text-main: #f0e6d2;
+            --warning-red: #ff4444;
+            --water-blue: #00bfff;
+        }
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #000; 
+            user-select: none; 
+            color: var(--text-main);
+        }
+
+        canvas { display: block; }
+        
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .full-overlay {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; text-align: center;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            transition: opacity 0.4s ease;
+        }
+
+        /* Menus */
+        #main-menu {
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), 
+                        radial-gradient(circle at center, #c27e3d, #2e1504);
+            z-index: 1100;
+            overflow-y: auto;
+            padding: 40px 0;
+        }
+
+        .menu-container {
+            background: var(--ui-glass);
+            padding: 45px;
+            border-radius: 40px;
+            border: 4px solid var(--desert-gold);
+            max-width: 850px;
+            width: 90%;
+            pointer-events: auto;
+            box-shadow: 0 0 100px rgba(0,0,0,1);
+            position: relative;
+        }
+
+        h1 { 
+            font-size: 64px; 
+            margin: 0 0 10px 0; 
+            color: var(--desert-gold); 
+            text-shadow: 5px 5px #000;
+            letter-spacing: 6px;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            font-style: italic; 
+            color: #ccc;
+            font-size: 20px;
+            margin-bottom: 30px;
+        }
+
+        .config-section {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            margin: 30px 0;
+            padding: 25px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 20px;
+            text-align: left;
+            border: 1px solid rgba(255,215,0,0.2);
+        }
+
+        .config-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        label {
+            font-weight: bold;
+            color: var(--desert-gold);
+            min-width: 140px;
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+
+        input[type="text"] {
+            background: rgba(0,0,0,0.7);
+            border: 2px solid var(--dried-earth);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            font-size: 18px;
+            flex-grow: 1;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus { border-color: var(--desert-gold); }
+
+        .skin-selector { display: flex; gap: 15px; }
+
+        .skin-box {
+            width: 50px; height: 50px;
+            border-radius: 50%; cursor: pointer;
+            border: 3px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .skin-box:hover { transform: scale(1.1); }
+        .skin-box.selected { border-color: var(--desert-gold); transform: scale(1.2); }
+
+        .btn {
+            padding: 18px 50px;
+            font-size: 24px;
+            font-weight: 900;
+            background: linear-gradient(to bottom, #a0522d, #5a2d0c);
+            color: #fff;
+            border: 3px solid var(--desert-gold);
+            cursor: pointer;
+            border-radius: 15px;
+            transition: all 0.2s;
+            margin: 10px;
+            text-transform: uppercase;
+            box-shadow: 0 6px 0 #3e1e06, 0 15px 20px rgba(0,0,0,0.5);
+        }
+
+        .btn:hover { filter: brightness(1.2); transform: translateY(-2px); }
+        .btn:active { transform: translateY(6px); box-shadow: 0 0px 0 #3e1e06; }
+
+        .instructions {
+            margin-top: 30px; font-size: 15px; color: #ddd; text-align: left; 
+            padding: 20px; background: rgba(0,0,0,0.6); border-radius: 15px;
+            line-height: 1.6; border-left: 4px solid var(--dusty-orange);
+        }
+
+        /* Game HUD */
+        #hud-top-left { position: absolute; top: 30px; left: 30px; pointer-events: none; }
+        .hud-card {
+            background: rgba(20, 10, 5, 0.85); 
+            border-left: 6px solid var(--desert-gold);
+            padding: 20px 30px; 
+            border-radius: 6px 20px 20px 6px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .stat-value { font-size: 36px; font-weight: 900; color: white; margin: 5px 0; }
+        .stat-label { font-size: 14px; color: var(--desert-gold); font-weight: bold; letter-spacing: 2px;}
+
+        /* Meters */
+        .meter-container {
+            width: 100%; height: 12px; background: #222; border-radius: 6px; margin-top: 10px; overflow: hidden;
+            border: 1px solid #444;
+        }
+        
+        #water-fill {
+            width: 100%; height: 100%; background: var(--water-blue);
+            transition: width 0.3s;
+        }
+
+        #interaction-msg {
+            position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.95); padding: 15px 35px; border-radius: 40px;
+            border: 2px solid var(--desert-gold); font-weight: bold;
+            font-size: 20px; color: var(--desert-gold);
+            display: none; letter-spacing: 1px; box-shadow: 0 0 20px rgba(255,215,0,0.2);
+            text-align: center;
+        }
+
+        #dig-meter {
+            position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+            width: 500px; height: 30px; background: rgba(0,0,0,0.8); 
+            border: 3px solid #fff; border-radius: 15px; overflow: hidden; display: none;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        
+        #dig-progress-fill { 
+            width: 0%; height: 100%; 
+            background: linear-gradient(90deg, #ffcc00, #ff6600, #ffcc00);
+            background-size: 200% 100%;
+            animation: gradient-flow 2s linear infinite;
+        }
+
+        /* Weather Alert */
+        #weather-alert {
+            position: absolute; top: 30px; right: 30px;
+            background: rgba(139, 0, 0, 0.8); border: 2px solid var(--warning-red);
+            padding: 15px 25px; border-radius: 10px; color: white; font-weight: bold;
+            font-size: 18px; display: none; animation: pulse 1s infinite alternate;
+        }
+
+        /* Screen Flash for Damage/Notifications */
+        #flash-screen {
+            position: absolute; inset: 0; background: black; opacity: 0; pointer-events: none; z-index: 50; transition: opacity 0.5s;
+        }
+        
+        #game-message {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            color: white; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 0 #000;
+            opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 60;
+            text-align: center;
+        }
+
+        .npc-tag {
+            position: absolute; color: white; background: rgba(0,0,0,0.7);
+            padding: 6px 14px; border-radius: 8px; font-size: 14px; font-weight: bold;
+            transform: translate(-50%, -150%); pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.2); z-index: 5; transition: opacity 0.2s;
+        }
+
+        @keyframes gradient-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+        @keyframes pulse { from { opacity: 0.8; box-shadow: 0 0 10px red; } to { opacity: 1; box-shadow: 0 0 30px red; } }
+
+    </style>
+</head>
+<body>
+
+    <!-- Main Entry Screen -->
+    <div id="main-menu" class="full-overlay">
+        <div class="menu-container">
+            <h1>Camp Green Lake</h1>
+            <div class="subtitle">"If you take a bad boy and make him dig a hole every day in the hot sun, it will turn him into a good boy."</div>
+            
+            <div class="config-section">
+                <div class="config-row">
+                    <label for="char-name">INMATE NAME:</label>
+                    <input type="text" id="char-name" placeholder="Stanley Yelnats" maxlength="15">
+                </div>
+                <div class="config-row">
+                    <label>SKIN TONE:</label>
+                    <div class="skin-selector" id="skin-selector">
+                        <div class="skin-box selected" style="background: #ffdbac;" data-color="#ffdbac"></div>
+                        <div class="skin-box" style="background: #f1c27d;" data-color="#f1c27d"></div>
+                        <div class="skin-box" style="background: #e0ac69;" data-color="#e0ac69"></div>
+                        <div class="skin-box" style="background: #8d5524;" data-color="#8d5524"></div>
+                        <div class="skin-box" style="background: #503020;" data-color="#503020"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn" onclick="startGame()">Start Your Sentence</button>
+            
+            <div class="instructions">
+                <b style="color: var(--desert-gold); font-size: 18px;">SURVIVAL GUIDE:</b><br><br>
+                • <b>DIGGING:</b> Walk out into the desert. Hold <b>SPACE</b> to dig until your hole is 5 feet deep.<br>
+                • <b>HYDRATION:</b> Digging and walking drain water. Drink from the <b>Water Truck</b> in camp (Press <b>E</b>).<br>
+                • <b>HAZARDS:</b> Sandstorms slow you down. Yellow-Spotted Lizards will bite you causing you to pass out.<br>
+                • <b>UPGRADES:</b> Press <b>P</b> to open the Trading Post and spend completed holes on better gear.
+            </div>
+        </div>
+    </div>
+
+    <!-- Shop Menu -->
+    <div id="shop-menu" class="full-overlay" style="display:none;">
+        <div class="menu-container" style="max-width: 600px;">
+            <h1 style="font-size: 40px;">TRADING POST</h1>
+            <div style="font-size: 20px; color: var(--desert-gold); margin-bottom: 20px;">Holes Available to Trade: <span id="shop-holes-count">0</span></div>
+            
+            <div style="display: flex; flex-direction: column; gap: 15px; margin: 20px 0;">
+                <button class="btn" onclick="buyItem('boots', 3)">Heavy Boots (3 Holes)<br><span style="font-size: 14px; font-weight: normal;">Walk slightly faster in sand.</span></button>
+                <button class="btn" onclick="buyItem('canteen', 5)">Large Canteen (5 Holes)<br><span style="font-size: 14px; font-weight: normal;">Increases max water capacity.</span></button>
+                <button class="btn" onclick="buyItem('shovel', 10)">Steel Shovel (10 Holes)<br><span style="font-size: 14px; font-weight: normal;">Dig holes twice as fast.</span></button>
+                <button class="btn" onclick="buyItem('goggles', 15)">Goggles (15 Holes)<br><span style="font-size: 14px; font-weight: normal;">Ignore sandstorm movement penalties.</span></button>
+            </div>
+            <button class="btn" style="width: 100%; opacity: 0.8; background: #333; border-color: #555;" onclick="closeAllMenus()">Back to Work (ESC)</button>
+        </div>
+    </div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        <div id="weather-alert">⚠️ SANDSTORM APPROACHING</div>
+        <div id="flash-screen"></div>
+        <div id="game-message"></div>
+        
+        <div id="hud-top-left">
+            <div class="hud-card">
+                <div class="stat-label" id="val-name">INMATE: STANLEY</div>
+                <div class="stat-value">Holes: <span id="val-holes" style="color: var(--desert-gold)">0</span></div>
+                <div style="font-size: 18px; margin-top: 5px; color: #aaa;">
+                    DAY <span id="val-day">1</span> | <span id="val-time">6:00 AM</span>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <div class="stat-label">HYDRATION</div>
+                    <div class="meter-container">
+                        <div id="water-fill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="dig-meter"><div id="dig-progress-fill"></div></div>
+        <div id="interaction-msg">INTERACT</div>
+        <div id="npc-container"></div>
+    </div>
+
+    <!-- =========================================
+         GAME ENGINE (THREE.JS)
+         ========================================= -->
+    <script>
+        // --- CONSTANTS & CONFIG ---
+        const WORLD_SIZE = 1200;
+        const HOLE_TARGET_DEPTH = 5.0; 
+        const HOLE_RADIUS = 5.0;
+        const INITIAL_NPC_COUNT = 12;
+        const LIZARD_COUNT = 15;
+        
+        const COLORS = {
+            sand: 0xc2a678,
+            darkSand: 0x8b7355,
+            skyDay: 0x87CEEB,
+            skyDusk: 0xff7e47,
+            skyNight: 0x0a0a2a,
+            fogDay: 0xd2b48c,
+            fogStorm: 0x8b7355
+        };
+
+        // --- GLOBAL STATE ---
+        const state = {
+            playing: false,
+            holes: 0,
+            currency: 0, // Using holes directly as currency here
+            day: 1,
+            time: 6.0, // 0 to 24
+            isDigging: false,
+            keys: {},
+            
+            // Survival Stats
+            water: 100,
+            maxWater: 100,
+            
+            // Character Config
+            userName: "Stanley",
+            skinTone: "#ffdbac",
+            
+            // Skills/Upgrades
+            digPower: 1.0,
+            baseMoveSpeed: 30.0,
+            hasGoggles: false,
+            
+            // Camera Variables
+            yaw: Math.PI,
+            pitch: -0.3,
+            camDist: 28,
+            
+            // Environment
+            weather: 'clear', // clear, storm
+            stormIntensity: 0,
+            windVector: new THREE.Vector3(1, 0, 0.5),
+            
+            // Entities
+            player: null,
+            npcs: [],
+            lizards: [],
+            interactable: null // Current object player can interact with
+        };
+
+        // --- THREE.JS VARIABLES ---
+        let scene, camera, renderer, clock;
+        let ground, groundGeo;
+        let sunLight, ambientLight, hemiLight;
+        let dustParticles, stormGeometry;
+        
+        // Materials to reuse
+        const matJumpsuit = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.9 });
+        const matShoes = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 1.0 });
+        const matMetal = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.4 });
+        const matWood = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.9 });
+
+        // --- INITIALIZATION ---
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(COLORS.skyDay); 
+            scene.fog = new THREE.FogExp2(COLORS.fogDay, 0.002);
+
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 5000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            setupLighting();
+            setupTerrain();
+            buildCamp();
+            setupSandstormParticles();
+            setupSkinSelector();
+
+            window.addEventListener('resize', onResize);
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', e => state.keys[e.code] = false);
+            document.addEventListener('mousemove', onMouseMove);
+            
+            // Handle clicking canvas to lock pointer
+            document.addEventListener('click', () => {
+                if (state.playing && !document.pointerLockElement) {
+                    document.body.requestPointerLock();
+                }
+            });
+
+            // Start main loop
+            animate();
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function setupLighting() {
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+
+            hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+            hemiLight.position.set(0, 200, 0);
+            scene.add(hemiLight);
+
+            sunLight = new THREE.DirectionalLight(0xfff5e1, 1.2);
+            sunLight.position.set(200, 400, 200);
+            sunLight.castShadow = true;
+            
+            // Optimize shadow map for large area
+            const d = 400;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 1000;
+            sunLight.shadow.bias = -0.0005;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+        }
+
+        function setupTerrain() {
+            // High resolution plane to allow smooth hole digging
+            groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 300, 300);
+            groundGeo.rotateX(-Math.PI / 2);
+            
+            // Add slight procedural bumps to the desert
+            const pos = groundGeo.attributes.position;
+            for(let i=0; i<pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                // Mild sine wave noise
+                let y = Math.sin(x * 0.02) * Math.cos(z * 0.02) * 1.5;
+                y += Math.sin(x * 0.05 + z * 0.01) * 0.5;
+                // Flatten the camp area
+                const distToCenter = Math.sqrt(x*x + z*z);
+                if(distToCenter < 150) {
+                    y *= (distToCenter / 150); // Smooth transition
+                }
+                pos.setY(i, y);
+            }
+            groundGeo.computeVertexNormals();
+            
+            const groundMat = new THREE.MeshStandardMaterial({ 
+                color: COLORS.sand, 
+                roughness: 1.0,
+                metalness: 0.0,
+                flatShading: true
+            });
+            
+            ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Add random desert decorations (rocks, dry bushes)
+            const decoGeo = new THREE.DodecahedronGeometry(1, 0);
+            const rockMat = new THREE.MeshStandardMaterial({ color: 0x554433, roughness: 0.9 });
+            const bushMat = new THREE.MeshStandardMaterial({ color: 0x4a4a32, roughness: 1.0 });
+
+            for(let i=0; i<300; i++) {
+                const isRock = Math.random() > 0.5;
+                const mesh = new THREE.Mesh(decoGeo, isRock ? rockMat : bushMat);
+                const a = Math.random() * Math.PI * 2;
+                const r = 160 + Math.random() * (WORLD_SIZE/2 - 160); // Don't spawn in camp
+                mesh.position.set(Math.cos(a)*r, 0, Math.sin(a)*r);
+                
+                // Set height based on terrain
+                const scaleY = isRock ? Math.random()*2+1 : Math.random()*4+2;
+                mesh.scale.set(Math.random()*2+1, scaleY, Math.random()*2+1);
+                mesh.position.y = scaleY/2;
+                mesh.rotation.y = Math.random() * Math.PI;
+                mesh.castShadow = true;
+                scene.add(mesh);
+            }
+        }
+
+        // --- CAMP CONSTRUCTION ---
+        function buildCamp() {
+            // Tents
+            const tentMat = new THREE.MeshStandardMaterial({ color: 0x6e5a42, roughness: 1 });
+            for(let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                const dist = 80;
+                const tent = new THREE.Group();
+                const tMesh = new THREE.Mesh(new THREE.CylinderGeometry(0, 12, 15, 4), tentMat);
+                tMesh.position.y = 7.5;
+                tMesh.rotation.y = Math.PI/4;
+                tMesh.castShadow = true;
+                tMesh.receiveShadow = true;
+                tent.add(tMesh);
+                tent.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist - 80);
+                scene.add(tent);
+            }
+
+            // Warden's Cabin
+            const cabin = new THREE.Group();
+            const cabinBody = new THREE.Mesh(new THREE.BoxGeometry(40, 20, 30), new THREE.MeshStandardMaterial({color: 0x3d2b1f}));
+            cabinBody.position.y = 10;
+            cabinBody.castShadow = true;
+            const cabinRoof = new THREE.Mesh(new THREE.ConeGeometry(30, 15, 4), new THREE.MeshStandardMaterial({color: 0x221100}));
+            cabinRoof.position.y = 27.5;
+            cabinRoof.rotation.y = Math.PI/4;
+            cabin.add(cabinBody, cabinRoof);
+            cabin.position.set(0, 0, -200);
+            scene.add(cabin);
+
+            // Water Truck (Crucial for survival)
+            createWaterTruck();
+
+            // Wreck of the Mary Lou
+            createMaryLouBoat();
+        }
+
+        function createWaterTruck() {
+            const truck = new THREE.Group();
+            
+            // Tank
+            const tank = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 20, 16), new THREE.MeshStandardMaterial({color: 0xaaaaaa, metalness: 0.6}));
+            tank.rotation.z = Math.PI/2;
+            tank.position.set(0, 8, 0);
+            tank.castShadow = true;
+            truck.add(tank);
+
+            // Cab
+            const cab = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), new THREE.MeshStandardMaterial({color: 0xaa2222}));
+            cab.position.set(15, 7, 0);
+            cab.castShadow = true;
+            truck.add(cab);
+
+            // Wheels
+            const wheelGeo = new THREE.CylinderGeometry(3, 3, 2, 16);
+            wheelGeo.rotateX(Math.PI/2);
+            const positions = [[-8, 3, 5], [-8, 3, -5], [15, 3, 5], [15, 3, -5]];
+            positions.forEach(pos => {
+                const w = new THREE.Mesh(wheelGeo, matShoes);
+                w.position.set(...pos);
+                truck.add(w);
+            });
+
+            truck.position.set(0, 0, 0);
+            scene.add(truck);
+            
+            // Interaction zone for truck
+            state.waterTruck = truck; 
+        }
+
+        function createMaryLouBoat() {
+            const boat = new THREE.Group();
+            const hull = new THREE.Mesh(new THREE.BoxGeometry(20, 8, 10), new THREE.MeshStandardMaterial({color: 0x4a3b2c}));
+            hull.position.y = 2;
+            hull.rotation.x = 0.2;
+            hull.rotation.z = -0.1;
+            hull.castShadow = true;
+            boat.add(hull);
+
+            boat.position.set(-250, 0, 300);
+            boat.rotation.y = 1.2;
+            scene.add(boat);
+        }
+
+        function setupSandstormParticles() {
+            stormGeometry = new THREE.BufferGeometry();
+            const particlesCount = 8000;
+            const posArray = new Float32Array(particlesCount * 3);
+            
+            for(let i = 0; i < particlesCount * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * WORLD_SIZE;
+            }
+            
+            stormGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const stormMaterial = new THREE.PointsMaterial({
+                size: 2.5,
+                color: 0xd2b48c,
+                transparent: true,
+                opacity: 0.0, // Hidden by default
+                blending: THREE.NormalBlending
+            });
+            
+            dustParticles = new THREE.Points(stormGeometry, stormMaterial);
+            scene.add(dustParticles);
+        }
+
+        // --- CHARACTER MODELING (WITH LIMBS) ---
+        function createAdvancedActor(skinToneColor, name, isPlayer = false) {
+            const group = new THREE.Group();
+            const skinMat = new THREE.MeshStandardMaterial({ color: skinToneColor, roughness: 0.7 });
+
+            // 1. Torso/Body
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.5, 1.0), matJumpsuit);
+            torso.position.y = 4.0; // Center height
+            torso.castShadow = true;
+            group.add(torso);
+
+            // 2. Head
+            const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), skinMat);
+            head.position.y = 1.3 + 0.6; // Relative to torso center
+            torso.add(head);
+
+            // 3. Limbs Setup
+            // Hips and Shoulders serve as pivot points
+            
+            // Left Leg
+            const legLGroup = new THREE.Group();
+            legLGroup.position.set(-0.5, -1.25, 0); // Bottom of torso
+            const legL = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.5, 0.6), matJumpsuit);
+            legL.position.y = -1.25; // Mesh hangs down from pivot
+            legL.castShadow = true;
+            const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.8), matShoes);
+            shoeL.position.set(0, -1.1, 0.1);
+            legL.add(shoeL);
+            legLGroup.add(legL);
+            torso.add(legLGroup);
+
+            // Right Leg
+            const legRGroup = new THREE.Group();
+            legRGroup.position.set(0.5, -1.25, 0);
+            const legR = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.5, 0.6), matJumpsuit);
+            legR.position.y = -1.25;
+            legR.castShadow = true;
+            const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.8), matShoes);
+            shoeR.position.set(0, -1.1, 0.1);
+            legR.add(shoeR);
+            legRGroup.add(legR);
+            torso.add(legRGroup);
+
+            // Left Arm
+            const armLGroup = new THREE.Group();
+            armLGroup.position.set(-1.1, 1.0, 0); // Top left of torso
+            const armL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.2, 0.5), matJumpsuit);
+            armL.position.y = -1.1;
+            armL.castShadow = true;
+            const handL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), skinMat);
+            handL.position.y = -1.2;
+            armL.add(handL);
+            armLGroup.add(armL);
+            torso.add(armLGroup);
+
+            // Right Arm
+            const armRGroup = new THREE.Group();
+            armRGroup.position.set(1.1, 1.0, 0);
+            const armR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.2, 0.5), matJumpsuit);
+            armR.position.y = -1.1;
+            armR.castShadow = true;
+            const handR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), skinMat);
+            handR.position.y = -1.2;
+            armR.add(handR);
+            armRGroup.add(armR);
+            torso.add(armRGroup);
+
+            // 4. Shovel
+            const shovel = new THREE.Group();
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 4.0), matWood);
+            pole.position.y = 0;
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.1), matMetal);
+            blade.position.y = -2.0;
+            shovel.add(pole, blade);
+            
+            // Attach shovel to right hand initially
+            shovel.position.set(0, -1.5, 0.5);
+            shovel.rotation.x = Math.PI / 2;
+            armRGroup.add(shovel);
+
+            scene.add(group);
+
+            // Name Tag
+            let tag = document.createElement('div');
+            tag.className = 'npc-tag';
+            tag.innerText = name;
+            if(!isPlayer) document.getElementById('npc-container').appendChild(tag);
+
+            return { 
+                mesh: group, torso, head, 
+                legL: legLGroup, legR: legRGroup, 
+                armL: armLGroup, armR: armRGroup,
+                shovel, tag, name, isPlayer, 
+                state: 'idle', timer: Math.random()*5, currentHoleDone: false,
+                walkCycle: 0,
+                currentHoleDepth: 0
+            };
+        }
+
+        // --- YELLOW SPOTTED LIZARDS ---
+        function createLizard() {
+            const group = new THREE.Group();
+            const lizardMat = new THREE.MeshStandardMaterial({color: 0xaaaa00, roughness: 1.0}); // Yellowish
+            
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 1.8), lizardMat);
+            body.position.y = 0.3;
+            group.add(body);
+            
+            // Red eyes / spots abstraction
+            const spotMat = new THREE.MeshBasicMaterial({color: 0xaa0000});
+            const eye1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), spotMat);
+            eye1.position.set(0.3, 0.5, 0.7);
+            const eye2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), spotMat);
+            eye2.position.set(-0.3, 0.5, 0.7);
+            group.add(eye1, eye2);
+
+            // Random placement outside camp
+            const a = Math.random() * Math.PI * 2;
+            const r = 100 + Math.random() * 400;
+            group.position.set(Math.cos(a)*r, 0, Math.sin(a)*r);
+            scene.add(group);
+
+            return {
+                mesh: group,
+                target: new THREE.Vector3(),
+                timer: 0,
+                walkCycle: 0
+            };
+        }
+
+        // --- TERRAIN MATH (DIGGING) ---
+        function deformGround(x, z, strength) {
+            const pos = groundGeo.attributes.position;
+            let centerDepth = 0;
+            let updated = false;
+
+            for(let i = 0; i < pos.count; i++) {
+                const vx = pos.getX(i);
+                const vz = pos.getZ(i);
+                const dist = Math.sqrt((vx-x)**2 + (vz-z)**2);
+                
+                if(dist < HOLE_RADIUS) {
+                    const influence = Math.pow(Math.cos((dist/HOLE_RADIUS)*(Math.PI/2)), 0.8);
+                    const curY = pos.getY(i);
+                    // Force the hole to look deep
+                    const newY = Math.max(-HOLE_TARGET_DEPTH, curY - (strength * influence));
+                    if(Math.abs(curY - newY) > 0.01) {
+                        pos.setY(i, newY);
+                        updated = true;
+                    }
+                    if(dist < 0.5) centerDepth = Math.abs(newY);
+                }
+            }
+            
+            if(updated) {
+                pos.needsUpdate = true;
+                groundGeo.computeVertexNormals();
+            }
+            return centerDepth;
+        }
+
+        function getGroundHeight(x, z) {
+            let y = Math.sin(x * 0.02) * Math.cos(z * 0.02) * 1.5;
+            y += Math.sin(x * 0.05 + z * 0.01) * 0.5;
+            const dist = Math.sqrt(x*x + z*z);
+            if(dist < 150) {
+                y *= (dist / 150); // Smooth camp area
+            }
+            
+            // Check against manual hole deformations
+            const pos = groundGeo.attributes.position;
+            let lowest = y;
+            for(let i=0; i<pos.count; i++) {
+                if(Math.abs(pos.getX(i) - x) < 2 && Math.abs(pos.getZ(i) - z) < 2) {
+                    if(pos.getY(i) < lowest) lowest = pos.getY(i);
+                }
+            }
+            return lowest;
+        }
+
+        // --- MENU LOGIC & INPUTS ---
+        function setupSkinSelector() {
+            document.querySelectorAll('.skin-box').forEach(box => {
+                box.addEventListener('click', (e) => {
+                    document.querySelectorAll('.skin-box').forEach(b => b.classList.remove('selected'));
+                    e.target.classList.add('selected');
+                    state.skinTone = e.target.dataset.color;
+                });
+            });
+        }
+
+        function startGame() {
+            const inputName = document.getElementById('char-name').value;
+            if(inputName) state.userName = inputName;
+            
+            document.getElementById('main-menu').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('main-menu').style.display = 'none';
+                document.getElementById('val-name').innerText = "INMATE: " + state.userName.toUpperCase();
+                
+                // Spawn Player
+                state.player = createAdvancedActor(state.skinTone, state.userName, true);
+                state.player.mesh.position.set(0, getGroundHeight(0,0), 30);
+                
+                // Spawn Lizards
+                for(let i=0; i<LIZARD_COUNT; i++) {
+                    state.lizards.push(createLizard());
+                }
+
+                state.playing = true;
+                document.body.requestPointerLock();
+            }, 500);
+        }
+
+        function onKeyDown(e) {
+            state.keys[e.code] = true;
+            
+            // Interaction
+            if (e.code === 'KeyE' && state.interactable === 'water') {
+                state.water = state.maxWater;
+                showMessage("Hydration Restored.", "var(--water-blue)");
+            }
+            
+            // Shop
+            if (e.code === 'KeyP') {
+                document.exitPointerLock();
+                document.getElementById('shop-menu').style.display = 'flex';
+                document.getElementById('shop-holes-count').innerText = state.currency;
+                state.playing = false;
+            }
+
+            // Exit menus
+            if (e.code === 'Escape') {
+                closeAllMenus();
+            }
+        }
+
+        function onMouseMove(e) {
+            if (document.pointerLockElement === document.body) {
+                // Adjust yaw and pitch from mouse movement
+                state.yaw -= e.movementX * 0.002;
+                state.pitch -= e.movementY * 0.002;
+                
+                // Clamp the pitch so the camera doesn't flip entirely upside down
+                state.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, state.pitch));
+            }
+        }
+
+        function buyItem(item, cost) {
+            if(state.currency >= cost) {
+                state.currency -= cost;
+                
+                // Apply specific upgrades
+                if(item === 'boots') state.baseMoveSpeed = 40.0;
+                if(item === 'canteen') state.maxWater = 150;
+                if(item === 'shovel') state.digPower = 2.0;
+                if(item === 'goggles') state.hasGoggles = true;
+                
+                document.getElementById('shop-holes-count').innerText = state.currency;
+                showMessage("Item purchased successfully!", "var(--desert-gold)");
+            } else {
+                alert("You haven't dug enough holes for this!");
+            }
+        }
+        
+        function closeAllMenus() {
+            document.getElementById('shop-menu').style.display = 'none';
+            if (state.player) {
+                state.playing = true;
+                document.body.requestPointerLock();
+            }
+        }
+
+        function showMessage(text, color) {
+            const msg = document.getElementById('game-message');
+            msg.innerText = text;
+            msg.style.color = color;
+            msg.style.opacity = '1';
+            setTimeout(() => msg.style.opacity = '0', 3000);
+        }
+
+        // --- MAIN GAME LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            // Cap delta time to prevent giant leaps if tab loses focus
+            const dt = Math.min(clock.getDelta(), 0.1);
+
+            if (state.playing && state.player) {
+                updateTimeAndWeather(dt);
+                updatePlayer(dt);
+                updateCamera();
+                updateLizards(dt);
+                updateUI();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // BUG FIX: Much slower time progression
+        function updateTimeAndWeather(dt) {
+            // 1 real second = 1 in-game minute. (60 secs = 1 hour, 24 minutes = 1 full day)
+            state.time += (dt / 60); 
+            if(state.time >= 24) { 
+                state.time = 0; 
+                state.day++; 
+            }
+            
+            // Basic Day/Night Cycle Lighting
+            if(state.time > 6 && state.time < 19) {
+                sunLight.intensity = 1.2;
+                scene.background.setHex(COLORS.skyDay);
+            } else if (state.time > 5 && state.time <= 6 || state.time >= 19 && state.time < 20) {
+                // Sunrise/Sunset transition roughly
+                sunLight.intensity = 0.5;
+                scene.background.setHex(COLORS.skyDusk);
+            } else {
+                sunLight.intensity = 0.1;
+                scene.background.setHex(COLORS.skyNight);
+            }
+
+            // Random Sandstorms
+            if(Math.random() < 0.0003 && state.weather === 'clear') {
+                state.weather = 'storm';
+                document.getElementById('weather-alert').style.display = 'block';
+            }
+            
+            if(state.weather === 'storm') {
+                state.stormIntensity = Math.min(1.0, state.stormIntensity + dt * 0.1);
+                dustParticles.material.opacity = state.stormIntensity * 0.8;
+                dustParticles.rotation.y += dt * 0.5;
+                if(Math.random() < 0.001) {
+                    state.weather = 'clear';
+                    document.getElementById('weather-alert').style.display = 'none';
+                }
+            } else {
+                state.stormIntensity = Math.max(0.0, state.stormIntensity - dt * 0.1);
+                dustParticles.material.opacity = state.stormIntensity * 0.8;
+            }
+            
+            scene.fog.density = 0.002 + (state.stormIntensity * 0.02);
+        }
+
+        function updatePlayer(dt) {
+            const p = state.player;
+            let moveX = 0, moveZ = 0;
+            
+            // WASD Input mapping relative to camera
+            if (state.keys['KeyW']) moveZ -= 1;
+            if (state.keys['KeyS']) moveZ += 1;
+            if (state.keys['KeyA']) moveX -= 1;
+            if (state.keys['KeyD']) moveX += 1;
+
+            const isMoving = (moveX !== 0 || moveZ !== 0);
+            state.isDigging = (state.keys['Space'] && !isMoving);
+
+            // Water Drain Logic
+            let drainRate = 0.3; // base drain
+            if(isMoving) drainRate = 0.8;
+            if(state.isDigging) drainRate = 2.0;
+            
+            state.water -= drainRate * dt;
+
+            if(state.water <= 0) {
+                showMessage("You passed out from dehydration...", "red");
+                p.mesh.position.set(0, 0, 30); // Respawn at camp
+                state.water = state.maxWater;
+                return;
+            }
+
+            // Movement & Animation
+            if (isMoving && !state.isDigging) {
+                let speed = state.baseMoveSpeed;
+                if(state.weather === 'storm' && !state.hasGoggles) speed *= 0.4; // Storm penalty
+                
+                // Calculate direction based on camera yaw
+                const dir = new THREE.Vector3(moveX, 0, moveZ).normalize();
+                dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), state.yaw);
+                
+                p.mesh.position.addScaledVector(dir, speed * dt);
+                
+                // Face the direction of movement
+                p.mesh.rotation.y = Math.atan2(dir.x, dir.z);
+
+                // Simple walk cycle animation for limbs
+                p.walkCycle += dt * 10;
+                p.legL.rotation.x = Math.sin(p.walkCycle) * 0.6;
+                p.legR.rotation.x = -Math.sin(p.walkCycle) * 0.6;
+                p.armL.rotation.x = -Math.sin(p.walkCycle) * 0.5;
+                p.armR.rotation.x = Math.sin(p.walkCycle) * 0.5;
+            } else {
+                // Reset limbs when standing still
+                p.legL.rotation.x = 0; p.legR.rotation.x = 0;
+                p.armL.rotation.x = 0; p.armR.rotation.x = 0;
+            }
+
+            // Clamp player to ground height
+            const gx = p.mesh.position.x;
+            const gz = p.mesh.position.z;
+            p.mesh.position.y = getGroundHeight(gx, gz);
+
+            // Bounds check
+            const d = Math.sqrt(gx*gx + gz*gz);
+            if(d > WORLD_SIZE/2) {
+                p.mesh.position.setLength(WORLD_SIZE/2 - 1);
+            }
+
+            // Digging Logic
+            if(state.isDigging) {
+                const distToCamp = Math.sqrt(gx*gx + gz*gz);
+                if(distToCamp < 80) {
+                    showMessage("You can't dig in the camp area!", "red");
+                } else {
+                    // Digging animation
+                    p.armR.rotation.x = Math.sin(clock.elapsedTime * 15) * 1.5 - 0.5; 
+                    
+                    document.getElementById('dig-meter').style.display = 'block';
+                    
+                    const depth = deformGround(gx, gz + 2, state.digPower * dt * 0.5);
+                    p.currentHoleDepth = depth;
+                    
+                    const pct = Math.min(100, (depth / HOLE_TARGET_DEPTH) * 100);
+                    document.getElementById('dig-progress-fill').style.width = pct + '%';
+                    
+                    // Hole Completion
+                    if(depth >= HOLE_TARGET_DEPTH && pct >= 100) {
+                        state.holes++;
+                        state.currency++;
+                        showMessage("HOLE COMPLETED!", "var(--desert-gold)");
+                        p.currentHoleDepth = 0;
+                        // Nudge player back so they don't get stuck in the hole geometry
+                        p.mesh.position.addScaledVector(new THREE.Vector3(0,0,1), 8); 
+                        state.keys['Space'] = false; // Force key up
+                    }
+                }
+            } else {
+                document.getElementById('dig-meter').style.display = 'none';
+            }
+
+            // Interactable Checks (Water Truck)
+            if(state.waterTruck && p.mesh.position.distanceTo(state.waterTruck.position) < 25) {
+                state.interactable = 'water';
+                document.getElementById('interaction-msg').style.display = 'block';
+                document.getElementById('interaction-msg').innerText = "PRESS E TO DRINK";
+            } else {
+                state.interactable = null;
+                document.getElementById('interaction-msg').style.display = 'none';
+            }
+        }
+
+        // BUG FIX: Complete Camera update function
+        function updateCamera() {
+            if (!state.player) return;
+            
+            // The point the camera looks at (player's head)
+            const target = state.player.mesh.position.clone().add(new THREE.Vector3(0, 5, 0));
+            
+            // Calculate orbital offset based on pitch and yaw
+            const offset = new THREE.Vector3(
+                Math.sin(state.yaw) * Math.cos(state.pitch),
+                Math.sin(state.pitch),
+                Math.cos(state.yaw) * Math.cos(state.pitch)
+            ).multiplyScalar(state.camDist);
+
+            // Apply position and rotation
+            camera.position.copy(target).add(offset);
+            camera.lookAt(target);
+            
+            // Prevent camera from clipping completely underground
+            const groundY = getGroundHeight(camera.position.x, camera.position.z);
+            if(camera.position.y < groundY + 2) {
+                camera.position.y = groundY + 2; 
+            }
+        }
+
+        function updateLizards(dt) {
+            const playerPos = state.player.mesh.position;
+            state.lizards.forEach(l => {
+                const dist = l.mesh.position.distanceTo(playerPos);
+                
+                // Aggressive behavior if near player
+                if(dist < 50 && state.playing) {
+                    const dir = playerPos.clone().sub(l.mesh.position).normalize();
+                    l.mesh.position.addScaledVector(dir, 12 * dt); // Move towards player
+                    l.mesh.lookAt(playerPos);
+                    
+                    if(dist < 4) {
+                        // Player Bitten!
+                        document.getElementById('flash-screen').style.opacity = '1';
+                        showMessage("BITTEN BY YELLOW SPOTTED LIZARD", "red");
+                        setTimeout(() => document.getElementById('flash-screen').style.opacity = '0', 500);
+                        state.player.mesh.position.set(0, 0, 30); // respawn at camp
+                    }
+                } else {
+                    // Idle wandering
+                    l.timer -= dt;
+                    if(l.timer <= 0) {
+                        l.timer = 3 + Math.random()*4;
+                        l.mesh.rotation.y = Math.random() * Math.PI * 2; // Random new direction
+                    }
+                    l.mesh.translateZ(5 * dt); // Move forward in local space
+                }
+                
+                // Clamp lizard to ground height
+                l.mesh.position.y = getGroundHeight(l.mesh.position.x, l.mesh.position.z) + 0.3;
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('val-holes').innerText = state.holes;
+            document.getElementById('val-day').innerText = state.day;
+            
+            // Format time display
+            let h = Math.floor(state.time);
+            let m = Math.floor((state.time - h) * 60);
+            let ampm = h >= 12 ? 'PM' : 'AM';
+            let dH = h % 12 || 12;
+            document.getElementById('val-time').innerText = `${dH}:${m < 10 ? '0'+m : m} ${ampm}`;
+
+            // Format water meter
+            const waterPct = Math.max(0, (state.water / state.maxWater) * 100);
+            const wFill = document.getElementById('water-fill');
+            wFill.style.width = waterPct + '%';
+            if(waterPct < 20) wFill.style.background = 'red';
+            else wFill.style.background = 'var(--water-blue)';
+        }
+
+        // Start initialization on window load
+        window.onload = init;
+    </script>
+</body>
+</html>

@@ -261,7 +261,8 @@
             
             <div class="instructions">
                 <b style="color: var(--desert-gold); font-size: 18px;">SURVIVAL GUIDE:</b><br><br>
-                • <b>DIGGING:</b> Walk out into the desert. Hold <b>SPACE</b> to dig until your hole is exactly 5 feet deep and 5 feet wide (takes 5 seconds).<br>
+                • <b>CAMP BOUNDARY:</b> The <span style="color: #ff4444;">red outline</span> marks the camp limits. You are not allowed to dig holes inside this area.<br>
+                • <b>DIGGING:</b> Walk outside the red boundary line. Hold <b>SPACE</b> to dig until your hole is exactly 5 feet deep and 5 feet wide (takes 5 seconds).<br>
                 • <b>HAZARDS:</b> Sandstorms slow you down. Yellow-Spotted Lizards will bite you causing you to pass out.<br>
                 • <b>UPGRADES:</b> Press <b>P</b> to open the Trading Post and spend completed holes on better gear.<br>
                 • <b>DEV MENU:</b> Press <b>~</b> (Tilde) to access developer tools.
@@ -326,6 +327,7 @@
     <script>
         // --- CONSTANTS & CONFIG ---
         const WORLD_SIZE = 1200;
+        const TERRAIN_SEGMENTS = 300;
         const HOLE_TARGET_DEPTH = 5.0; 
         const HOLE_RADIUS = 2.5; // 5 feet wide (diameter) = 2.5 radius
         const INITIAL_NPC_COUNT = 10;
@@ -354,7 +356,7 @@
             userName: "Stanley",
             skinTone: "#ffdbac",
             
-            digPower: 1.0, // 1 depth unit per second
+            digPower: 1.0, 
             baseMoveSpeed: 30.0,
             hasGoggles: false,
             
@@ -368,7 +370,7 @@
             player: null,
             npcs: [],
             lizards: [],
-            obstacles: [] // Collision boundaries for tents/buildings
+            obstacles: [] 
         };
 
         // --- THREE.JS VARIABLES ---
@@ -443,7 +445,7 @@
         }
 
         function setupTerrain() {
-            groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 300, 300);
+            groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, TERRAIN_SEGMENTS, TERRAIN_SEGMENTS);
             groundGeo.rotateX(-Math.PI / 2);
             
             const pos = groundGeo.attributes.position;
@@ -493,7 +495,24 @@
 
         // --- CAMP CONSTRUCTION ---
         function buildCamp() {
-            // Tents (Now with collision)
+            // Camp Boundary (Red Line where digging is allowed)
+            const boundaryPts = [];
+            for (let i = 0; i <= 64; i++) {
+                const theta = (i / 64) * Math.PI * 2;
+                const bx = Math.cos(theta) * 100;
+                const bz = Math.sin(theta) * 100;
+                // Calculate original height for boundary to match terrain exactly
+                let by = Math.sin(bx * 0.02) * Math.cos(bz * 0.02) * 1.5;
+                by += Math.sin(bx * 0.05 + bz * 0.01) * 0.5;
+                by *= (100 / 150); 
+                boundaryPts.push(new THREE.Vector3(bx, by + 0.3, bz));
+            }
+            const boundaryGeo = new THREE.BufferGeometry().setFromPoints(boundaryPts);
+            const boundaryMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const campBoundary = new THREE.LineLoop(boundaryGeo, boundaryMat);
+            scene.add(campBoundary);
+
+            // Tents 
             const tentMat = new THREE.MeshStandardMaterial({ color: 0x6e5a42, roughness: 1 });
             for(let i = 0; i < 6; i++) {
                 const angle = (i / 6) * Math.PI * 2;
@@ -512,7 +531,7 @@
                 tent.position.set(tentX, 0, tentZ);
                 scene.add(tent);
 
-                // Add collision bounds (radius 15)
+                // Add collision bounds
                 state.obstacles.push({ x: tentX, z: tentZ, radius: 15 });
             }
 
@@ -527,8 +546,6 @@
             cabin.add(cabinBody, cabinRoof);
             cabin.position.set(0, 0, -200);
             scene.add(cabin);
-
-            // Add Cabin to obstacles
             state.obstacles.push({ x: 0, z: -200, radius: 25 });
 
             createMaryLouBoat();
@@ -546,7 +563,6 @@
             boat.position.set(-250, 0, 300);
             boat.rotation.y = 1.2;
             scene.add(boat);
-            
             state.obstacles.push({ x: -250, z: 300, radius: 15 });
         }
 
@@ -654,7 +670,7 @@
                 armL: armLGroup, armR: armRGroup,
                 shovel, tag, name, isPlayer, 
                 aiState: 'wander', targetPos: new THREE.Vector3(), digTimer: 0,
-                walkCycle: 0, currentHoleDepth: 0, radius: 1.5
+                walkCycle: 0, radius: 1.5
             };
         }
 
@@ -681,53 +697,65 @@
             return { mesh: group, timer: 0 };
         }
 
-        // --- TERRAIN MATH & COLLISIONS ---
+        // --- OPTIMIZED TERRAIN MATH & COLLISIONS ---
         function deformGround(x, z, strength) {
             const pos = groundGeo.attributes.position;
-            let centerDepth = 0;
             let updated = false;
 
-            for(let i = 0; i < pos.count; i++) {
-                const vx = pos.getX(i);
-                const vz = pos.getZ(i);
-                const dist = Math.sqrt((vx-x)**2 + (vz-z)**2);
-                
-                if(dist < HOLE_RADIUS) {
-                    // Cosine curve for smooth hole slope based on strictly defined radius
-                    const influence = Math.cos((dist/HOLE_RADIUS)*(Math.PI/2)); 
-                    const curY = pos.getY(i);
-                    // Cap depth at HOLE_TARGET_DEPTH
-                    const newY = Math.max(-HOLE_TARGET_DEPTH * influence, curY - (strength * influence));
+            const UNITS = WORLD_SIZE / TERRAIN_SEGMENTS; 
+            const rad = HOLE_RADIUS + 2; // Check a slightly larger bounding box to guarantee coverage
+            
+            const minX = Math.max(0, Math.floor((x - rad + WORLD_SIZE/2) / UNITS));
+            const maxX = Math.min(TERRAIN_SEGMENTS, Math.ceil((x + rad + WORLD_SIZE/2) / UNITS));
+            const minZ = Math.max(0, Math.floor((z - rad + WORLD_SIZE/2) / UNITS));
+            const maxZ = Math.min(TERRAIN_SEGMENTS, Math.ceil((z + rad + WORLD_SIZE/2) / UNITS));
+
+            // Only loop through vertices inside the small bounding box (Massive lag fix)
+            for (let gz = minZ; gz <= maxZ; gz++) {
+                for (let gx = minX; gx <= maxX; gx++) {
+                    let i = gz * (TERRAIN_SEGMENTS + 1) + gx;
+                    const vx = pos.getX(i);
+                    const vz = pos.getZ(i);
+                    const dist = Math.sqrt((vx-x)**2 + (vz-z)**2);
                     
-                    if(Math.abs(curY - newY) > 0.01) {
-                        pos.setY(i, newY);
-                        updated = true;
+                    if (dist <= HOLE_RADIUS) {
+                        const influence = Math.cos((dist/HOLE_RADIUS)*(Math.PI/2)); 
+                        const curY = pos.getY(i);
+                        const newY = Math.max(-HOLE_TARGET_DEPTH, curY - (strength * influence));
+                        
+                        if (Math.abs(curY - newY) > 0.001) {
+                            pos.setY(i, newY);
+                            updated = true;
+                        }
                     }
-                    if(dist < 0.5) centerDepth = Math.abs(newY);
                 }
             }
             
-            if(updated) {
+            if (updated) {
                 pos.needsUpdate = true;
                 groundGeo.computeVertexNormals();
             }
-            return centerDepth;
         }
 
         function getGroundHeight(x, z) {
-            let y = Math.sin(x * 0.02) * Math.cos(z * 0.02) * 1.5;
-            y += Math.sin(x * 0.05 + z * 0.01) * 0.5;
-            const dist = Math.sqrt(x*x + z*z);
-            if(dist < 150) y *= (dist / 150); 
-            
             const pos = groundGeo.attributes.position;
-            let lowest = y;
-            for(let i=0; i<pos.count; i++) {
-                if(Math.abs(pos.getX(i) - x) < 3 && Math.abs(pos.getZ(i) - z) < 3) {
-                    if(pos.getY(i) < lowest) lowest = pos.getY(i);
+            const UNITS = WORLD_SIZE / TERRAIN_SEGMENTS;
+            
+            const minX = Math.max(0, Math.floor((x - 2 + WORLD_SIZE/2) / UNITS));
+            const maxX = Math.min(TERRAIN_SEGMENTS, Math.ceil((x + 2 + WORLD_SIZE/2) / UNITS));
+            const minZ = Math.max(0, Math.floor((z - 2 + WORLD_SIZE/2) / UNITS));
+            const maxZ = Math.min(TERRAIN_SEGMENTS, Math.ceil((z + 2 + WORLD_SIZE/2) / UNITS));
+
+            let lowest = Infinity;
+            // Only loop through local area (Massive lag fix)
+            for (let gz = minZ; gz <= maxZ; gz++) {
+                for (let gx = minX; gx <= maxX; gx++) {
+                    let i = gz * (TERRAIN_SEGMENTS + 1) + gx;
+                    const y = pos.getY(i);
+                    if (y < lowest) lowest = y;
                 }
             }
-            return lowest;
+            return lowest === Infinity ? 0 : lowest;
         }
 
         function resolveCollisions(pos, entityRadius) {
@@ -746,7 +774,6 @@
         }
 
         function getNewDigSpot() {
-            // Pick random spot in desert away from camp
             let angle = Math.random() * Math.PI * 2;
             let dist = 160 + Math.random() * (WORLD_SIZE/2 - 200);
             return new THREE.Vector3(Math.cos(angle)*dist, 0, Math.sin(angle)*dist);
@@ -778,14 +805,12 @@
                 state.player = createAdvancedActor(state.skinTone, state.userName, true);
                 state.player.mesh.position.set(0, getGroundHeight(0,0), 30);
                 
-                // Spawn NPCs
                 for(let i=0; i<INITIAL_NPC_COUNT; i++) {
                     let name = i < npcNames.length ? npcNames[i] : "Inmate " + i;
                     let color = npcColors[Math.floor(Math.random() * npcColors.length)];
                     let npc = createAdvancedActor(color, name, false);
                     npc.targetPos = getNewDigSpot();
                     
-                    // Spawn them somewhere around camp initially
                     let a = Math.random() * Math.PI * 2;
                     npc.mesh.position.set(Math.cos(a)*50, 0, Math.sin(a)*50);
                     state.npcs.push(npc);
@@ -808,7 +833,7 @@
                 state.playing = false;
             }
 
-            if (e.code === 'Backquote') { // Tilde key for Dev Menu
+            if (e.code === 'Backquote') { 
                 document.exitPointerLock();
                 document.getElementById('dev-menu').style.display = 'flex';
                 state.playing = false;
@@ -850,7 +875,6 @@
             }
         }
 
-        // DEV MENU FUNCTIONS
         function toggleStorm() {
             state.weather = state.weather === 'clear' ? 'storm' : 'clear';
             document.getElementById('weather-alert').style.display = state.weather === 'storm' ? 'block' : 'none';
@@ -928,9 +952,21 @@
             if (state.keys['KeyD']) moveX += 1;
 
             const isMoving = (moveX !== 0 || moveZ !== 0);
-            state.isDigging = (state.keys['Space'] && !isMoving);
 
-            if (isMoving && !state.isDigging) {
+            // Progress Bar & Digging Interrupt Logic
+            if (!state.keys['Space'] || isMoving) {
+                state.isDigging = false;
+                if (p.digTimer > 0) {
+                    p.digTimer = 0;
+                    document.getElementById('dig-meter').style.display = 'none';
+                    p.armR.rotation.x = 0;
+                }
+            } else {
+                state.isDigging = true;
+            }
+
+            // Movement
+            if (isMoving) {
                 let speed = state.baseMoveSpeed;
                 if(state.weather === 'storm' && !state.hasGoggles) speed *= 0.4; 
                 
@@ -947,7 +983,8 @@
                 p.armR.rotation.x = Math.sin(p.walkCycle) * 0.5;
             } else {
                 p.legL.rotation.x = 0; p.legR.rotation.x = 0;
-                p.armL.rotation.x = 0; p.armR.rotation.x = 0;
+                p.armL.rotation.x = 0;
+                if(!state.isDigging) p.armR.rotation.x = 0;
             }
 
             // Collisions & Constraints
@@ -957,32 +994,40 @@
             const d = Math.sqrt(p.mesh.position.x**2 + p.mesh.position.z**2);
             if(d > WORLD_SIZE/2) p.mesh.position.setLength(WORLD_SIZE/2 - 1);
 
-            // Digging
+            // Digging execution
             if(state.isDigging) {
                 if(d < 100) {
                     showMessage("You can't dig inside the camp!", "red");
+                    state.isDigging = false;
+                    p.digTimer = 0;
+                    document.getElementById('dig-meter').style.display = 'none';
+                    p.armR.rotation.x = 0;
                 } else {
                     p.armR.rotation.x = Math.sin(clock.elapsedTime * 15) * 1.5 - 0.5; 
                     document.getElementById('dig-meter').style.display = 'block';
                     
-                    // Digging takes EXACTLY 5 seconds (5 depth / 1 rate)
-                    const depth = deformGround(p.mesh.position.x, p.mesh.position.z + 2.5, dt * 1.0 * state.digPower);
-                    p.currentHoleDepth = depth;
+                    // Increment internal dig timer based on time
+                    p.digTimer += dt * state.digPower;
                     
-                    const pct = Math.min(100, (depth / HOLE_TARGET_DEPTH) * 100);
+                    const pct = Math.min(100, (p.digTimer / 5.0) * 100);
                     document.getElementById('dig-progress-fill').style.width = pct + '%';
                     
-                    if(depth >= HOLE_TARGET_DEPTH && pct >= 100) {
+                    // Deform geometry gradually
+                    deformGround(p.mesh.position.x, p.mesh.position.z + 2.5, dt * 1.0 * state.digPower);
+                    
+                    // Completion
+                    if(p.digTimer >= 5.0) {
                         state.holes++;
                         state.currency++;
                         showMessage("HOLE COMPLETED!", "var(--desert-gold)");
-                        p.currentHoleDepth = 0;
-                        p.mesh.position.addScaledVector(new THREE.Vector3(0,0,1), 8); 
+                        p.digTimer = 0;
+                        p.mesh.position.addScaledVector(new THREE.Vector3(0,0,1), 8); // Move out of hole
                         state.keys['Space'] = false; 
+                        state.isDigging = false;
+                        document.getElementById('dig-meter').style.display = 'none';
+                        p.armR.rotation.x = 0;
                     }
                 }
-            } else {
-                document.getElementById('dig-meter').style.display = 'none';
             }
         }
 
@@ -999,14 +1044,12 @@
                         npc.legL.rotation.x = 0; npc.legR.rotation.x = 0;
                         npc.armL.rotation.x = 0; npc.armR.rotation.x = 0;
                     } else {
-                        // Move to spot
                         let moveSpeed = state.weather === 'storm' ? 10 : 25;
                         let moveDist = Math.min(dist, moveSpeed * dt);
                         npc.mesh.position.x += (dx/dist) * moveDist;
                         npc.mesh.position.z += (dz/dist) * moveDist;
                         npc.mesh.rotation.y = Math.atan2(dx, dz);
                         
-                        // Walk Anim
                         npc.walkCycle += dt * 10;
                         npc.legL.rotation.x = Math.sin(npc.walkCycle) * 0.6;
                         npc.legR.rotation.x = -Math.sin(npc.walkCycle) * 0.6;
@@ -1019,7 +1062,7 @@
                     
                     deformGround(npc.mesh.position.x, npc.mesh.position.z + 2.5, dt * 1.0);
                     
-                    if(npc.digTimer >= 5.0) { // Takes 5 seconds
+                    if(npc.digTimer >= 5.0) { 
                         npc.aiState = 'wander';
                         npc.targetPos = getNewDigSpot();
                         npc.armR.rotation.x = 0;
@@ -1029,13 +1072,12 @@
                 resolveCollisions(npc.mesh.position, npc.radius);
                 npc.mesh.position.y = getGroundHeight(npc.mesh.position.x, npc.mesh.position.z);
 
-                // Update Name Tag Position
                 if (npc.tag) {
                     const tempV = npc.mesh.position.clone();
-                    tempV.y += 6; // Above head
+                    tempV.y += 6; 
                     tempV.project(camera);
                     
-                    if(tempV.z > 1) { // Behind camera
+                    if(tempV.z > 1) { 
                         npc.tag.style.display = 'none';
                     } else {
                         const x = (tempV.x * .5 + .5) * window.innerWidth;
@@ -1044,7 +1086,6 @@
                         npc.tag.style.left = `${x}px`;
                         npc.tag.style.top = `${y}px`;
                         
-                        // Opacity based on distance
                         const distToPlayer = npc.mesh.position.distanceTo(state.player.mesh.position);
                         npc.tag.style.opacity = distToPlayer > 150 ? '0' : '1';
                     }

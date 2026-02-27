@@ -46,7 +46,7 @@
         }
 
         /* Menus */
-        #main-menu, #dev-menu, #password-modal {
+        #main-menu, #dev-menu, #password-modal, #multiplayer-menu {
             background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), 
                         radial-gradient(circle at center, #c27e3d, #2e1504);
             z-index: 1100;
@@ -144,8 +144,8 @@
         .skin-box.selected { border-color: var(--desert-gold); transform: scale(1.2); }
 
         .btn {
-            padding: 18px 50px;
-            font-size: 24px;
+            padding: 18px 30px;
+            font-size: 20px;
             font-weight: 900;
             background: linear-gradient(to bottom, #a0522d, #5a2d0c);
             color: #fff;
@@ -156,17 +156,25 @@
             margin: 10px;
             text-transform: uppercase;
             box-shadow: 0 6px 0 #3e1e06, 0 15px 20px rgba(0,0,0,0.5);
+            flex: 1;
         }
         
+        .btn-mp {
+            background: linear-gradient(to bottom, #2a5298, #1e3c72);
+            border-color: #4fa3d1;
+            box-shadow: 0 6px 0 #112244, 0 15px 20px rgba(0,0,0,0.5);
+        }
+
         .btn-dev {
             background: linear-gradient(to bottom, #444, #222);
             border-color: #ff5555;
             font-size: 18px;
             padding: 15px 30px;
+            flex: none;
         }
 
         .btn:hover { filter: brightness(1.2); transform: translateY(-2px); }
-        .btn:active { transform: translateY(6px); box-shadow: 0 0px 0 #3e1e06; }
+        .btn:active { transform: translateY(6px); box-shadow: 0 0px 0 transparent; }
 
         .instructions {
             margin-top: 30px; font-size: 15px; color: #ddd; text-align: left; 
@@ -187,6 +195,7 @@
 
         .stat-value { font-size: 36px; font-weight: 900; color: white; margin: 5px 0; }
         .stat-label { font-size: 14px; color: var(--desert-gold); font-weight: bold; letter-spacing: 2px;}
+        .mode-label { font-size: 12px; color: #4fa3d1; font-weight: bold; margin-bottom: 5px; }
 
         #dig-meter {
             position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
@@ -229,11 +238,16 @@
             pointer-events: none; border: 1px solid rgba(255,255,255,0.2); 
             z-index: 5; transition: opacity 0.2s;
             will-change: transform;
+            text-align: center;
         }
 
         @keyframes gradient-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
         @keyframes pulse { from { opacity: 0.8; box-shadow: 0 0 10px red; } to { opacity: 1; box-shadow: 0 0 30px red; } }
 
+        /* Scrollbar for multiplayer list */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.5); border-radius: 5px; }
+        ::-webkit-scrollbar-thumb { background: var(--desert-gold); border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -261,15 +275,41 @@
                 </div>
             </div>
 
-            <button class="btn" onclick="startGame()">Start Your Sentence</button>
+            <div style="display: flex; gap: 20px; width: 100%;">
+                <button class="btn" onclick="startGame(false)">Play Solo</button>
+                <button class="btn btn-mp" onclick="openMultiplayer()">Multiplayer Lobby</button>
+            </div>
             
             <div class="instructions">
                 <b style="color: var(--desert-gold); font-size: 18px;">SURVIVAL GUIDE:</b><br><br>
                 • <b>CAMP BOUNDARY:</b> The <span style="color: #ff4444;">red outline</span> marks the camp limits. You are not allowed to dig holes inside this area.<br>
                 • <b>DIGGING:</b> Walk outside the red boundary line. Hold <b>SPACE</b> to dig until your hole is exactly 5 feet deep and 5 feet wide.<br>
                 • <b>HAZARDS:</b> Sandstorms slow you down. Yellow-Spotted Lizards will bite you causing you to pass out.<br>
-                • <b>UPGRADES:</b> Press <b>P</b> to open the Trading Post and spend completed holes on better gear.
+                • <b>UPGRADES:</b> Press <b>P</b> to open the Trading Post and spend completed holes on better gear.<br>
+                • <b>MULTIPLAYER:</b> Host a world for your friends to join online!
             </div>
+        </div>
+    </div>
+
+    <!-- Multiplayer Menu -->
+    <div id="multiplayer-menu" class="full-overlay" style="display:none;">
+        <div class="menu-container" style="max-width: 700px;">
+            <h1 style="font-size: 48px; color: #4fa3d1;">WORLD LOBBY</h1>
+            <div id="mp-status" style="color: var(--desert-gold); margin-bottom: 20px; font-weight: bold;">Connecting to server...</div>
+            
+            <div class="config-section" style="border-color: rgba(79, 163, 209, 0.4);">
+                <div class="config-row">
+                    <input type="text" id="world-name-input" placeholder="Enter World Name" maxlength="20">
+                    <button class="btn btn-mp" style="flex: 0 0 auto; margin: 0;" onclick="hostWorld()">Host World</button>
+                </div>
+            </div>
+            
+            <div style="text-align: left; font-weight: bold; color: #ccc; margin-bottom: 10px;">AVAILABLE WORLDS:</div>
+            <div id="worlds-list" style="max-height: 250px; overflow-y: auto; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 15px; margin-bottom: 30px; border: 2px solid var(--dried-earth); text-align: left;">
+                <!-- World items injected here -->
+            </div>
+            
+            <button class="btn" style="width: 100%; opacity: 0.8; background: #333; border-color: #555;" onclick="closeMultiplayer()">Back to Main Menu</button>
         </div>
     </div>
 
@@ -326,6 +366,7 @@
         
         <div id="hud-top-left">
             <div class="hud-card">
+                <div class="mode-label" id="val-mode" style="display:none;">ONLINE WORLD</div>
                 <div class="stat-label" id="val-name">INMATE: STANLEY</div>
                 <div class="stat-value">Holes: <span id="val-holes" style="color: var(--desert-gold)">0</span></div>
                 <div style="font-size: 18px; margin-top: 5px; color: #aaa;">
@@ -339,6 +380,173 @@
     </div>
 
     <!-- =========================================
+         FIREBASE MULTIPLAYER MODULE
+         ========================================= -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'camp-green-lake';
+        window.appId = appId;
+        
+        let firebaseConfig = {};
+        if (typeof __firebase_config !== 'undefined') {
+            try { firebaseConfig = JSON.parse(__firebase_config); } catch(e){}
+        }
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        window.db = db;
+        
+        let unsubscribeAuth = null;
+        let worldsUnsubscribe = null;
+        window.playersUnsubscribe = null;
+        
+        window.initFirebase = async function() {
+            if (window.firebaseInitialized) return;
+            document.getElementById('mp-status').innerText = "Authenticating with server...";
+            
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch(e) {
+                console.error("Auth error:", e);
+                document.getElementById('mp-status').innerText = "Failed to connect. Try Solo Play.";
+            }
+            
+            unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    window.userId = user.uid;
+                    document.getElementById('mp-status').innerText = "Connected! Select a world or host a new one.";
+                    window.listenToWorlds();
+                    window.firebaseInitialized = true;
+                }
+            });
+        };
+
+        window.listenToWorlds = function() {
+            if (!window.userId) return;
+            if (worldsUnsubscribe) worldsUnsubscribe();
+            
+            worldsUnsubscribe = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'worlds'), (snapshot) => {
+                const list = document.getElementById('worlds-list');
+                list.innerHTML = '';
+                if (snapshot.empty) {
+                    list.innerHTML = '<div style="color: #aaa; text-align: center; padding: 20px;">No active worlds found. Host one to start playing!</div>';
+                    return;
+                }
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    // Clean up old worlds (> 2 hours old) client side display logic
+                    if (Date.now() - data.createdAt > 7200000) return; 
+
+                    const div = document.createElement('div');
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.style.alignItems = 'center';
+                    div.style.padding = '12px';
+                    div.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
+                    div.innerHTML = `
+                        <div>
+                            <div style="font-weight: bold; color: var(--desert-gold); font-size: 20px; text-transform: uppercase;">${data.name}</div>
+                            <div style="color: #aaa; font-size: 14px;">Host: ${data.hostName}</div>
+                        </div>
+                        <button class="btn btn-mp" style="padding: 10px 20px; font-size: 16px; margin: 0; flex: 0;" onclick="joinWorld('${docSnap.id}', '${data.name}')">Join</button>
+                    `;
+                    list.appendChild(div);
+                });
+            }, (error) => {
+                console.error("Worlds listener error", error);
+                document.getElementById('mp-status').innerText = "Error loading worlds.";
+            });
+        };
+
+        window.hostWorld = async function() {
+            if (!window.userId) return;
+            let hostInputName = document.getElementById('char-name').value;
+            if(!hostInputName) hostInputName = "Stanley";
+
+            let worldName = document.getElementById('world-name-input').value;
+            if (!worldName) worldName = hostInputName + "'s Camp";
+
+            const worldId = 'world-' + Date.now();
+            
+            document.getElementById('mp-status').innerText = "Creating world...";
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'worlds', worldId), {
+                    name: worldName,
+                    hostName: hostInputName,
+                    createdAt: Date.now()
+                });
+                window.joinWorld(worldId, worldName);
+            } catch(e) {
+                console.error("Error creating world", e);
+                document.getElementById('mp-status').innerText = "Error creating world. Try again.";
+            }
+        };
+
+        window.joinWorld = function(worldId, worldName) {
+            window.currentWorldId = worldId;
+            document.getElementById('multiplayer-menu').style.display = 'none';
+            
+            document.getElementById('val-mode').style.display = 'block';
+            document.getElementById('val-mode').innerText = "ONLINE: " + worldName;
+            
+            window.startGame(true); // Start game in multiplayer mode
+            
+            // Listen to remote players
+            window.playersUnsubscribe = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'players'), (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    const data = change.doc.data();
+                    const id = change.doc.id;
+                    if (id === window.userId) return; // Skip self
+                    
+                    if (change.type === 'removed' || data.worldId !== window.currentWorldId) {
+                        window.removeRemotePlayer(id);
+                    } else {
+                        window.updateRemotePlayer(id, data);
+                    }
+                });
+            }, (err) => console.error("Players listener error", err));
+        };
+
+        window.syncPlayerState = async function(playerData) {
+            if (!window.userId || !window.currentWorldId) return;
+            
+            const payload = {
+                ...playerData,
+                worldId: window.currentWorldId,
+                timestamp: Date.now()
+            };
+            
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', window.userId), payload);
+            } catch(e) {
+                // Ignore silent sync failures
+            }
+        };
+
+        window.leaveWorld = async function() {
+            if (window.userId) {
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', window.userId)); } catch(e){}
+            }
+            if (window.playersUnsubscribe) window.playersUnsubscribe();
+            window.currentWorldId = null;
+        };
+        
+        window.addEventListener('beforeunload', () => {
+            if (window.userId && window.currentWorldId) {
+                deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'players', window.userId)).catch(()=>{});
+            }
+        });
+    </script>
+
+    <!-- =========================================
          GAME ENGINE (THREE.JS)
          ========================================= -->
     <script>
@@ -347,7 +555,7 @@
         const TERRAIN_SEGMENTS = 200; 
         const HOLE_TARGET_DEPTH = 5.0; 
         const HOLE_RADIUS = 2.5; 
-        const INITIAL_NPC_COUNT = 10;
+        const INITIAL_NPC_COUNT = 8;
         const LIZARD_COUNT = 15;
         
         const COLORS = {
@@ -363,6 +571,7 @@
         // --- GLOBAL STATE ---
         const state = {
             playing: false,
+            isMultiplayer: false,
             holes: 0,
             currency: 0, 
             day: 1,
@@ -375,7 +584,7 @@
             
             digPower: 1.0, 
             baseMoveSpeed: 30.0,
-            isSuperSpeed: false, // Added for toggle functionality
+            isSuperSpeed: false,
             hasGoggles: false,
             
             yaw: Math.PI,
@@ -389,6 +598,7 @@
             npcs: [],
             lizards: [],
             obstacles: [],
+            remotePlayersData: {}, // Holds synced remote players
             
             groundNormalsNeedsUpdate: false,
             lastNormalUpdate: 0,
@@ -437,6 +647,21 @@
                     document.body.requestPointerLock();
                 }
             });
+
+            // Multiplayer Sync Loop (5 ticks per second)
+            setInterval(() => {
+                if (state.playing && state.isMultiplayer && state.player && window.syncPlayerState) {
+                    window.syncPlayerState({
+                        name: state.userName,
+                        skinTone: state.skinTone,
+                        x: state.player.mesh.position.x,
+                        y: state.player.mesh.position.y,
+                        z: state.player.mesh.position.z,
+                        yaw: state.player.mesh.rotation.y,
+                        isDigging: state.isDigging
+                    });
+                }
+            }, 200);
 
             animate();
         }
@@ -587,7 +812,7 @@
         }
 
         // --- CHARACTER MODELING ---
-        function createAdvancedActor(skinToneColor, name, isPlayer = false) {
+        function createAdvancedActor(skinToneColor, name, isPlayer = false, isRemote = false) {
             const group = new THREE.Group();
             const skinMat = new THREE.MeshStandardMaterial({ color: skinToneColor, roughness: 0.7 });
 
@@ -659,7 +884,14 @@
 
             let tag = document.createElement('div');
             tag.className = 'npc-tag';
-            tag.innerText = name;
+            if (isRemote) {
+                tag.style.color = '#4fa3d1'; // highlight real players
+                tag.style.border = '1px solid #4fa3d1';
+                tag.innerText = "🌐 " + name;
+            } else {
+                tag.innerText = name;
+            }
+
             if(!isPlayer) document.getElementById('npc-container').appendChild(tag);
 
             return { 
@@ -667,8 +899,8 @@
                 legL: legLGroup, legR: legRGroup, 
                 armL: armLGroup, armR: armRGroup,
                 shovel, tag, name, isPlayer, 
-                aiState: 'wander', targetPos: new THREE.Vector3(), digTimer: 0,
-                walkCycle: 0, radius: 1.5
+                aiState: 'wander', targetPos: new THREE.Vector3(), targetYaw: 0, isDigging: false, digTimer: 0,
+                walkCycle: 0, radius: 1.5, lastUpdate: Date.now()
             };
         }
 
@@ -775,6 +1007,17 @@
         }
 
         // --- MENU LOGIC & INPUTS ---
+        window.openMultiplayer = function() {
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('multiplayer-menu').style.display = 'flex';
+            if(window.initFirebase) window.initFirebase();
+        }
+
+        window.closeMultiplayer = function() {
+            document.getElementById('multiplayer-menu').style.display = 'none';
+            document.getElementById('main-menu').style.display = 'flex';
+        }
+
         function setupSkinSelector() {
             document.querySelectorAll('.skin-box').forEach(box => {
                 box.addEventListener('click', (e) => {
@@ -785,21 +1028,27 @@
             });
         }
 
-        const npcNames = ["Zero", "Armpit", "X-Ray", "Squid", "Magnet", "Zigzag", "Caveman", "Twitch", "Barf Bag", "Brian"];
+        const npcNames = ["Zero", "Armpit", "X-Ray", "Squid", "Magnet", "Zigzag", "Caveman"];
         const npcColors = ["#8d5524", "#503020", "#e0ac69", "#f1c27d", "#ffdbac"];
 
-        function startGame() {
+        window.startGame = function(isMultiplayer = false) {
             const inputName = document.getElementById('char-name').value;
             if(inputName) state.userName = inputName;
             
+            state.isMultiplayer = isMultiplayer;
+
             document.getElementById('main-menu').style.opacity = '0';
+            document.getElementById('multiplayer-menu').style.opacity = '0';
+            
             setTimeout(() => {
                 document.getElementById('main-menu').style.display = 'none';
+                document.getElementById('multiplayer-menu').style.display = 'none';
                 document.getElementById('val-name').innerText = "INMATE: " + state.userName.toUpperCase();
                 
                 state.player = createAdvancedActor(state.skinTone, state.userName, true);
                 state.player.mesh.position.set(0, getGroundHeight(0,0), 30);
                 
+                // Spawn Local NPCs for flavor
                 for(let i=0; i<INITIAL_NPC_COUNT; i++) {
                     let name = i < npcNames.length ? npcNames[i] : "Inmate " + i;
                     let color = npcColors[Math.floor(Math.random() * npcColors.length)];
@@ -846,7 +1095,7 @@
             }
 
             if (e.code === 'Escape') {
-                closeAllMenus();
+                window.closeAllMenus();
             }
         }
 
@@ -858,7 +1107,7 @@
             }
         }
 
-        function checkDevPassword() {
+        window.checkDevPassword = function() {
             const input = document.getElementById('dev-password-input');
             const pwd = input.value;
             
@@ -867,12 +1116,12 @@
                 input.value = '';
                 document.getElementById('dev-menu').style.display = 'flex';
             } else {
-                showMessage("ACCESS DENIED: Incorrect Password", "red");
-                closePasswordModal();
+                window.showMessage("ACCESS DENIED: Incorrect Password", "red");
+                window.closePasswordModal();
             }
         }
 
-        function closePasswordModal() {
+        window.closePasswordModal = function() {
             document.getElementById('password-modal').style.display = 'none';
             document.getElementById('dev-password-input').value = '';
             
@@ -882,7 +1131,7 @@
             }
         }
 
-        function buyItem(item, cost) {
+        window.buyItem = function(item, cost) {
             if(state.currency >= cost) {
                 state.currency -= cost;
                 if(item === 'boots') state.baseMoveSpeed = 40.0;
@@ -890,46 +1139,43 @@
                 if(item === 'goggles') state.hasGoggles = true;
                 
                 document.getElementById('shop-holes-count').innerText = state.currency;
-                showMessage("Item purchased successfully!", "var(--desert-gold)");
-                forceUpdateUI();
+                window.showMessage("Item purchased successfully!", "var(--desert-gold)");
+                window.forceUpdateUI();
             } else {
-                showMessage("You haven't dug enough holes for this!", "red");
+                window.showMessage("You haven't dug enough holes for this!", "red");
             }
         }
         
-        function closeAllMenus() {
+        window.closeAllMenus = function() {
             document.getElementById('shop-menu').style.display = 'none';
             document.getElementById('dev-menu').style.display = 'none';
-            closePasswordModal();
+            window.closePasswordModal();
             if (state.player) {
                 state.playing = true;
                 document.body.requestPointerLock();
             }
         }
 
-        function toggleSuperSpeed() {
+        window.toggleSuperSpeed = function() {
             state.isSuperSpeed = !state.isSuperSpeed;
-            if (state.isSuperSpeed) {
-                showMessage('Super Speed Enabled', '#ff5555');
-            } else {
-                showMessage('Super Speed Disabled', '#ff5555');
-            }
+            if (state.isSuperSpeed) window.showMessage('Super Speed Enabled', '#ff5555');
+            else window.showMessage('Super Speed Disabled', '#ff5555');
         }
 
-        function toggleStorm() {
+        window.toggleStorm = function() {
             state.weather = state.weather === 'clear' ? 'storm' : 'clear';
             document.getElementById('weather-alert').style.display = state.weather === 'storm' ? 'block' : 'none';
-            showMessage(state.weather === 'storm' ? 'Storm Started' : 'Storm Cleared', '#ff5555');
+            window.showMessage(state.weather === 'storm' ? 'Storm Started' : 'Storm Cleared', '#ff5555');
         }
 
-        function teleportToCamp() {
+        window.teleportToCamp = function() {
             if(state.player) {
                 state.player.mesh.position.set(0, 0, 30);
-                showMessage('Teleported to Camp', '#ff5555');
+                window.showMessage('Teleported to Camp', '#ff5555');
             }
         }
 
-        function showMessage(text, color) {
+        window.showMessage = function(text, color) {
             const msg = document.getElementById('game-message');
             msg.innerText = text;
             msg.style.color = color;
@@ -937,9 +1183,34 @@
             setTimeout(() => msg.style.opacity = '0', 3000);
         }
 
-        function forceUpdateUI() {
+        window.forceUpdateUI = function() {
             state.lastUIUpdate = 0; 
         }
+
+        // --- MULTIPLAYER HELPERS ---
+        window.updateRemotePlayer = function(id, data) {
+            if (!state.remotePlayersData[id]) {
+                state.remotePlayersData[id] = createAdvancedActor(data.skinTone, data.name, false, true);
+                state.remotePlayersData[id].mesh.position.set(data.x, data.y, data.z);
+                state.remotePlayersData[id].mesh.rotation.y = data.yaw;
+            }
+            const rp = state.remotePlayersData[id];
+            rp.targetPos.set(data.x, data.y, data.z);
+            rp.targetYaw = data.yaw;
+            rp.isDigging = data.isDigging;
+            rp.lastUpdate = Date.now();
+            
+            // Sync ground deformation visually from other players digging
+            if (data.isDigging) deformGround(data.x, data.z + 2.5, 0.1);
+        };
+
+        window.removeRemotePlayer = function(id) {
+            if (state.remotePlayersData[id]) {
+                scene.remove(state.remotePlayersData[id].mesh);
+                if(state.remotePlayersData[id].tag) state.remotePlayersData[id].tag.remove();
+                delete state.remotePlayersData[id];
+            }
+        };
 
         // --- MAIN GAME LOOP ---
         function animate() {
@@ -950,6 +1221,7 @@
                 updateTimeAndWeather(dt);
                 updatePlayer(dt);
                 updateNPCs(dt);
+                updateRemotePlayers(dt);
                 updateCamera();
                 updateLizards(dt);
                 
@@ -970,7 +1242,7 @@
 
         function updateTimeAndWeather(dt) {
             state.time += (dt / 60); 
-            if(state.time >= 24) { state.time = 0; state.day++; forceUpdateUI(); }
+            if(state.time >= 24) { state.time = 0; state.day++; window.forceUpdateUI(); }
             
             if(state.time > 6 && state.time < 19) {
                 sunLight.intensity = 1.2;
@@ -983,13 +1255,13 @@
                 scene.background.setHex(COLORS.skyNight);
             }
 
-            if(Math.random() < 0.0003 && state.weather === 'clear') toggleStorm();
+            if(Math.random() < 0.0003 && state.weather === 'clear') window.toggleStorm();
             
             if(state.weather === 'storm') {
                 state.stormIntensity = Math.min(1.0, state.stormIntensity + dt * 0.1);
                 dustParticles.material.opacity = state.stormIntensity * 0.8;
                 dustParticles.rotation.y += dt * 0.5;
-                if(Math.random() < 0.001) toggleStorm();
+                if(Math.random() < 0.001) window.toggleStorm();
             } else {
                 state.stormIntensity = Math.max(0.0, state.stormIntensity - dt * 0.1);
                 dustParticles.material.opacity = state.stormIntensity * 0.8;
@@ -1048,7 +1320,7 @@
 
             if(state.isDigging) {
                 if(d < 100) {
-                    showMessage("You can't dig inside the camp!", "red");
+                    window.showMessage("You can't dig inside the camp!", "red");
                     state.isDigging = false;
                     p.digTimer = 0;
                     document.getElementById('dig-meter').style.display = 'none';
@@ -1067,8 +1339,8 @@
                     if(p.digTimer >= 5.0) {
                         state.holes++;
                         state.currency++;
-                        showMessage("HOLE COMPLETED!", "var(--desert-gold)");
-                        forceUpdateUI();
+                        window.showMessage("HOLE COMPLETED!", "var(--desert-gold)");
+                        window.forceUpdateUI();
                         p.digTimer = 0;
                         p.mesh.position.addScaledVector(new THREE.Vector3(0,0,1), 8); 
                         state.keys['Space'] = false; 
@@ -1121,25 +1393,64 @@
                 resolveCollisions(npc.mesh.position, npc.radius);
                 npc.mesh.position.y = getGroundHeight(npc.mesh.position.x, npc.mesh.position.z);
 
-                if (npc.tag) {
-                    const tempV = npc.mesh.position.clone();
-                    tempV.y += 6; 
-                    tempV.project(camera);
+                updateTagPosition(npc);
+            });
+        }
+
+        function updateRemotePlayers(dt) {
+            for (const id in state.remotePlayersData) {
+                const rp = state.remotePlayersData[id];
+                
+                // Interpolate position and rotation
+                rp.mesh.position.lerp(rp.targetPos, 0.2);
+                rp.mesh.rotation.y = rp.targetYaw;
+                
+                const distToTarget = rp.mesh.position.distanceTo(rp.targetPos);
+                
+                if (distToTarget > 0.5 && !rp.isDigging) {
+                    rp.walkCycle += dt * 15;
+                    rp.legL.rotation.x = Math.sin(rp.walkCycle) * 0.6;
+                    rp.legR.rotation.x = -Math.sin(rp.walkCycle) * 0.6;
+                    rp.armL.rotation.x = -Math.sin(rp.walkCycle) * 0.5;
+                    rp.armR.rotation.x = Math.sin(rp.walkCycle) * 0.5;
+                } else {
+                    rp.legL.rotation.x = 0; rp.legR.rotation.x = 0;
+                    rp.armL.rotation.x = 0;
                     
-                    if(tempV.z > 1) { 
-                        npc.tag.style.display = 'none';
+                    if(rp.isDigging) {
+                        rp.armR.rotation.x = Math.sin(clock.elapsedTime * 15) * 1.5 - 0.5;
                     } else {
-                        const x = (tempV.x * .5 + .5) * window.innerWidth;
-                        const y = (tempV.y * -.5 + .5) * window.innerHeight;
-                        npc.tag.style.display = 'block';
-                        
-                        npc.tag.style.transform = `translate(${x}px, ${y}px) translate(-50%, -150%)`;
-                        
-                        const distToPlayer = npc.mesh.position.distanceTo(state.player.mesh.position);
-                        npc.tag.style.opacity = distToPlayer > 150 ? '0' : '1';
+                        rp.armR.rotation.x = 0;
                     }
                 }
-            });
+                
+                updateTagPosition(rp);
+                
+                // Disconnect stale players (10s timeout)
+                if (Date.now() - rp.lastUpdate > 10000) {
+                    window.removeRemotePlayer(id);
+                }
+            }
+        }
+
+        function updateTagPosition(entity) {
+            if (entity.tag) {
+                const tempV = entity.mesh.position.clone();
+                tempV.y += 6; 
+                tempV.project(camera);
+                
+                if(tempV.z > 1) { 
+                    entity.tag.style.display = 'none';
+                } else {
+                    const x = (tempV.x * .5 + .5) * window.innerWidth;
+                    const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                    entity.tag.style.display = 'block';
+                    entity.tag.style.transform = `translate(${x}px, ${y}px) translate(-50%, -150%)`;
+                    
+                    const distToPlayer = entity.mesh.position.distanceTo(state.player.mesh.position);
+                    entity.tag.style.opacity = distToPlayer > 180 ? '0' : '1';
+                }
+            }
         }
 
         function updateCamera() {
@@ -1173,7 +1484,7 @@
                     
                     if(dist < 4) {
                         document.getElementById('flash-screen').style.opacity = '1';
-                        showMessage("BITTEN BY YELLOW SPOTTED LIZARD", "red");
+                        window.showMessage("BITTEN BY YELLOW SPOTTED LIZARD", "red");
                         setTimeout(() => document.getElementById('flash-screen').style.opacity = '0', 500);
                         state.player.mesh.position.set(0, 0, 30); 
                     }

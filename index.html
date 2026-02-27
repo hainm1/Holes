@@ -308,7 +308,7 @@
             <h2>DEV MENU</h2>
             <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 15px;">
                 <button class="btn btn-dev" onclick="state.holes += 10; state.currency += 10; showMessage('Added 10 Holes', '#ff5555'); forceUpdateUI();">Add 10 Holes</button>
-                <button class="btn btn-dev" onclick="state.baseMoveSpeed = 120.0; showMessage('Super Speed Enabled', '#ff5555');">Super Speed</button>
+                <button class="btn btn-dev" onclick="toggleSuperSpeed();">Toggle Super Speed</button>
                 <button class="btn btn-dev" onclick="state.time = 12; showMessage('Time set to Noon', '#ff5555');">Set Time: Noon</button>
                 <button class="btn btn-dev" onclick="state.time = 0; showMessage('Time set to Midnight', '#ff5555');">Set Time: Midnight</button>
                 <button class="btn btn-dev" onclick="toggleStorm();">Toggle Storm</button>
@@ -375,6 +375,7 @@
             
             digPower: 1.0, 
             baseMoveSpeed: 30.0,
+            isSuperSpeed: false, // Added for toggle functionality
             hasGoggles: false,
             
             yaw: Math.PI,
@@ -851,7 +852,6 @@
 
         function onMouseMove(e) {
             if (document.pointerLockElement === document.body) {
-                // Corrected Y-axis to follow standard non-inverted mouse movement
                 state.yaw -= e.movementX * 0.002;
                 state.pitch += e.movementY * 0.002;
                 state.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, state.pitch));
@@ -876,7 +876,6 @@
             document.getElementById('password-modal').style.display = 'none';
             document.getElementById('dev-password-input').value = '';
             
-            // Only resume if other menus aren't open
             if (state.player && document.getElementById('dev-menu').style.display === 'none' && document.getElementById('shop-menu').style.display === 'none') {
                 state.playing = true;
                 document.body.requestPointerLock();
@@ -905,6 +904,15 @@
             if (state.player) {
                 state.playing = true;
                 document.body.requestPointerLock();
+            }
+        }
+
+        function toggleSuperSpeed() {
+            state.isSuperSpeed = !state.isSuperSpeed;
+            if (state.isSuperSpeed) {
+                showMessage('Super Speed Enabled', '#ff5555');
+            } else {
+                showMessage('Super Speed Disabled', '#ff5555');
             }
         }
 
@@ -1012,7 +1020,7 @@
             }
 
             if (isMoving) {
-                let speed = state.baseMoveSpeed;
+                let speed = state.isSuperSpeed ? 120.0 : state.baseMoveSpeed;
                 if(state.weather === 'storm' && !state.hasGoggles) speed *= 0.4; 
                 
                 const dir = new THREE.Vector3(moveX, 0, moveZ).normalize();

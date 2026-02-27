@@ -46,7 +46,7 @@
         }
 
         /* Menus */
-        #main-menu, #dev-menu {
+        #main-menu, #dev-menu, #password-modal {
             background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), 
                         radial-gradient(circle at center, #c27e3d, #2e1504);
             z-index: 1100;
@@ -55,6 +55,7 @@
         }
 
         #dev-menu { z-index: 2000; background: rgba(0,0,0,0.9); }
+        #password-modal { z-index: 2500; background: rgba(0,0,0,0.9); }
 
         .menu-container {
             background: var(--ui-glass);
@@ -114,7 +115,7 @@
             letter-spacing: 1px;
         }
 
-        input[type="text"] {
+        input[type="text"], input[type="password"] {
             background: rgba(0,0,0,0.7);
             border: 2px solid var(--dried-earth);
             color: white;
@@ -126,7 +127,7 @@
             transition: border-color 0.3s;
         }
 
-        input[type="text"]:focus { border-color: var(--desert-gold); }
+        input[type="text"]:focus, input[type="password"]:focus { border-color: var(--desert-gold); }
 
         .skin-selector { display: flex; gap: 15px; }
 
@@ -226,7 +227,7 @@
             padding: 6px 14px; border-radius: 8px; font-size: 14px; font-weight: bold;
             pointer-events: none; border: 1px solid rgba(255,255,255,0.2); 
             z-index: 5; transition: opacity 0.2s;
-            will-change: transform; /* Hint to browser to GPU accelerate this */
+            will-change: transform;
         }
 
         @keyframes gradient-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
@@ -266,8 +267,7 @@
                 • <b>CAMP BOUNDARY:</b> The <span style="color: #ff4444;">red outline</span> marks the camp limits. You are not allowed to dig holes inside this area.<br>
                 • <b>DIGGING:</b> Walk outside the red boundary line. Hold <b>SPACE</b> to dig until your hole is exactly 5 feet deep and 5 feet wide.<br>
                 • <b>HAZARDS:</b> Sandstorms slow you down. Yellow-Spotted Lizards will bite you causing you to pass out.<br>
-                • <b>UPGRADES:</b> Press <b>P</b> to open the Trading Post and spend completed holes on better gear.<br>
-                • <b>DEV MENU:</b> Press <b>~</b> (Tilde) to access developer tools.
+                • <b>UPGRADES:</b> Press <b>P</b> to open the Trading Post and spend completed holes on better gear.
             </div>
         </div>
     </div>
@@ -284,6 +284,20 @@
                 <button class="btn" onclick="buyItem('goggles', 15)">Goggles (15 Holes)<br><span style="font-size: 14px; font-weight: normal;">Ignore sandstorm movement penalties.</span></button>
             </div>
             <button class="btn" style="width: 100%; opacity: 0.8; background: #333; border-color: #555;" onclick="closeAllMenus()">Back to Work (ESC)</button>
+        </div>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="password-modal" class="full-overlay" style="display:none;">
+        <div class="menu-container" style="max-width: 500px; text-align: center;">
+            <h2 style="color: var(--warning-red); margin-bottom: 30px;">RESTRICTED ACCESS</h2>
+            <div style="margin-bottom: 30px;">
+                <input type="password" id="dev-password-input" placeholder="Enter Developer Password" style="width: 80%; text-align: center;" onkeydown="if(event.key === 'Enter') checkDevPassword()">
+            </div>
+            <div style="display: flex; justify-content: center; gap: 15px;">
+                <button class="btn" style="padding: 15px 30px; font-size: 20px;" onclick="checkDevPassword()">Submit</button>
+                <button class="btn" style="background: #333; border-color: #555; padding: 15px 30px; font-size: 20px;" onclick="closePasswordModal()">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -328,7 +342,6 @@
          ========================================= -->
     <script>
         // --- CONSTANTS & CONFIG ---
-        // Reduced world dimensions and segments to massively improve baseline performance
         const WORLD_SIZE = 800; 
         const TERRAIN_SEGMENTS = 200; 
         const HOLE_TARGET_DEPTH = 5.0; 
@@ -375,7 +388,6 @@
             lizards: [],
             obstacles: [],
             
-            // Performance/Throttling trackers
             groundNormalsNeedsUpdate: false,
             lastNormalUpdate: 0,
             lastUIUpdate: 0
@@ -400,7 +412,7 @@
 
             camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 5000);
             
-            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" }); // Disabled Antialiasing for speed
+            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -439,7 +451,6 @@
             sunLight.position.set(200, 400, 200);
             sunLight.castShadow = true;
             
-            // Reduced shadow map dimensions for performance
             const d = 400;
             sunLight.shadow.camera.left = -d;
             sunLight.shadow.camera.right = d;
@@ -481,26 +492,8 @@
             ground = new THREE.Mesh(groundGeo, groundMat);
             ground.receiveShadow = true;
             scene.add(ground);
-
-            const decoGeo = new THREE.DodecahedronGeometry(1, 0);
-            const rockMat = new THREE.MeshStandardMaterial({ color: 0x554433, roughness: 0.9 });
-            const bushMat = new THREE.MeshStandardMaterial({ color: 0x4a4a32, roughness: 1.0 });
-
-            for(let i=0; i<300; i++) {
-                const isRock = Math.random() > 0.5;
-                const mesh = new THREE.Mesh(decoGeo, isRock ? rockMat : bushMat);
-                const a = Math.random() * Math.PI * 2;
-                const r = 160 + Math.random() * (WORLD_SIZE/2 - 160); 
-                mesh.position.set(Math.cos(a)*r, 0, Math.sin(a)*r);
-                
-                const scaleY = isRock ? Math.random()*2+1 : Math.random()*4+2;
-                mesh.scale.set(Math.random()*2+1, scaleY, Math.random()*2+1);
-                mesh.position.y = scaleY/2;
-                mesh.rotation.y = Math.random() * Math.PI;
-                // Shadows disabled for scatter objects to massively reduce draw calls
-                mesh.castShadow = false; 
-                scene.add(mesh);
-            }
+            
+            // Scatter objects (rocks/bushes) intentionally removed to match the barren lake bed in the book
         }
 
         // --- CAMP CONSTRUCTION ---
@@ -735,33 +728,28 @@
                 }
             }
             
-            // Critical Optimization: Do not compute normals on every frame during deformation.
             if (updated) {
                 pos.needsUpdate = true;
                 state.groundNormalsNeedsUpdate = true;
             }
         }
 
-        // Critical Optimization: O(1) grid height lookup instead of O(N) bounding box loop
         function getGroundHeight(x, z) {
             const UNITS = WORLD_SIZE / TERRAIN_SEGMENTS;
             
             let gx = Math.floor((x + WORLD_SIZE/2) / UNITS);
             let gz = Math.floor((z + WORLD_SIZE/2) / UNITS);
             
-            // Clamp strictly inside the generated grid
             gx = Math.max(0, Math.min(TERRAIN_SEGMENTS - 1, gx));
             gz = Math.max(0, Math.min(TERRAIN_SEGMENTS - 1, gz));
 
             const pos = groundGeo.attributes.position;
             
-            // Find the 4 vertices making up the grid square the entity is currently above
             const i1 = gz * (TERRAIN_SEGMENTS + 1) + gx;
             const i2 = i1 + 1;
             const i3 = (gz + 1) * (TERRAIN_SEGMENTS + 1) + gx;
             const i4 = i3 + 1;
 
-            // Simple average interpolation for stability and speed
             return (pos.getY(i1) + pos.getY(i2) + pos.getY(i3) + pos.getY(i4)) / 4;
         }
 
@@ -842,7 +830,8 @@
 
             if (e.code === 'Backquote') { 
                 document.exitPointerLock();
-                document.getElementById('dev-menu').style.display = 'flex';
+                document.getElementById('password-modal').style.display = 'flex';
+                setTimeout(() => document.getElementById('dev-password-input').focus(), 50);
                 state.playing = false;
             }
 
@@ -859,6 +848,31 @@
             }
         }
 
+        function checkDevPassword() {
+            const input = document.getElementById('dev-password-input');
+            const pwd = input.value;
+            
+            if (pwd === 'Pinto1002!' || pwd === '!2012Liamis13!') {
+                document.getElementById('password-modal').style.display = 'none';
+                input.value = '';
+                document.getElementById('dev-menu').style.display = 'flex';
+            } else {
+                showMessage("ACCESS DENIED: Incorrect Password", "red");
+                closePasswordModal();
+            }
+        }
+
+        function closePasswordModal() {
+            document.getElementById('password-modal').style.display = 'none';
+            document.getElementById('dev-password-input').value = '';
+            
+            // Only resume if other menus aren't open
+            if (state.player && document.getElementById('dev-menu').style.display === 'none' && document.getElementById('shop-menu').style.display === 'none') {
+                state.playing = true;
+                document.body.requestPointerLock();
+            }
+        }
+
         function buyItem(item, cost) {
             if(state.currency >= cost) {
                 state.currency -= cost;
@@ -870,13 +884,14 @@
                 showMessage("Item purchased successfully!", "var(--desert-gold)");
                 forceUpdateUI();
             } else {
-                alert("You haven't dug enough holes for this!");
+                showMessage("You haven't dug enough holes for this!", "red");
             }
         }
         
         function closeAllMenus() {
             document.getElementById('shop-menu').style.display = 'none';
             document.getElementById('dev-menu').style.display = 'none';
+            closePasswordModal();
             if (state.player) {
                 state.playing = true;
                 document.body.requestPointerLock();
@@ -905,7 +920,7 @@
         }
 
         function forceUpdateUI() {
-            state.lastUIUpdate = 0; // Forces next update pass to trigger
+            state.lastUIUpdate = 0; 
         }
 
         // --- MAIN GAME LOOP ---
@@ -920,14 +935,12 @@
                 updateCamera();
                 updateLizards(dt);
                 
-                // Throttle expensive UI updates to 5 times per second
                 if (clock.elapsedTime - state.lastUIUpdate > 0.2) {
                     updateUI();
                     state.lastUIUpdate = clock.elapsedTime;
                 }
             }
 
-            // Throttle massive geometry normal recalculations
             if (state.groundNormalsNeedsUpdate && clock.elapsedTime - state.lastNormalUpdate > 0.5) {
                 groundGeo.computeVertexNormals();
                 state.groundNormalsNeedsUpdate = false;
@@ -1102,7 +1115,6 @@
                         const y = (tempV.y * -.5 + .5) * window.innerHeight;
                         npc.tag.style.display = 'block';
                         
-                        // Performance Fix: Use transform instead of top/left to avoid layout thrashing
                         npc.tag.style.transform = `translate(${x}px, ${y}px) translate(-50%, -150%)`;
                         
                         const distToPlayer = npc.mesh.position.distanceTo(state.player.mesh.position);

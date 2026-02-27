@@ -128,6 +128,7 @@
         }
 
         input[type="text"]:focus, input[type="password"]:focus { border-color: var(--desert-gold); }
+        input[type="password"]:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .skin-selector { display: flex; gap: 15px; }
 
@@ -492,8 +493,6 @@
             ground = new THREE.Mesh(groundGeo, groundMat);
             ground.receiveShadow = true;
             scene.add(ground);
-            
-            // Scatter objects (rocks/bushes) intentionally removed to match the barren lake bed in the book
         }
 
         // --- CAMP CONSTRUCTION ---
@@ -830,8 +829,18 @@
 
             if (e.code === 'Backquote') { 
                 document.exitPointerLock();
+                const pwdInput = document.getElementById('dev-password-input');
+                pwdInput.disabled = true;
+                pwdInput.value = '';
+                pwdInput.placeholder = "Please wait 1 second...";
                 document.getElementById('password-modal').style.display = 'flex';
-                setTimeout(() => document.getElementById('dev-password-input').focus(), 50);
+                
+                setTimeout(() => {
+                    pwdInput.disabled = false;
+                    pwdInput.placeholder = "Enter Developer Password";
+                    pwdInput.focus();
+                }, 1000);
+                
                 state.playing = false;
             }
 
@@ -842,8 +851,9 @@
 
         function onMouseMove(e) {
             if (document.pointerLockElement === document.body) {
+                // Corrected Y-axis to follow standard non-inverted mouse movement
                 state.yaw -= e.movementX * 0.002;
-                state.pitch -= e.movementY * 0.002;
+                state.pitch += e.movementY * 0.002;
                 state.pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, state.pitch));
             }
         }
